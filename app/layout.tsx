@@ -1,12 +1,17 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Collège ABC",
-  description: "Premier projet Next.js",
+  description: "Site du Collège ABC : formations, étudiants et gestion",
 };
 
+/*
+  Layout racine : la navbar et le footer sont communs à toutes les pages.
+  flex + min-h-screen : le footer reste en bas même si la page est courte.
+*/
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -14,30 +19,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr">
-      <body>
+      <body className="flex min-h-screen flex-col bg-slate-50 text-slate-800">
 
-        <header className="header">
-          <div className="headerContainer">
+        <Navbar />
 
-            <h1 className="logo">Collège ABC</h1>
-
-            <nav className="navigation">
-              <Link href="/">Accueil</Link>
-              <Link href="/etudiants">Étudiants</Link>
-              <Link href="/formations">Formations</Link>
-              <Link href="/contact">Contact</Link>
-            </nav>
-
-          </div>
-        </header>
-
-        <main className="main">
+        <main className="flex-1">
           {children}
         </main>
 
-        <footer className="footer">
-          <p>© 2026 Collège ABC</p>
-        </footer>
+        <Footer />
 
       </body>
     </html>

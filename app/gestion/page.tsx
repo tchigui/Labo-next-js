@@ -1,535 +1,286 @@
+import { connection } from "next/server";
 import { prisma } from "@/lib/prisma";
-
+import EnTete from "@/components/EnTete";
 import {
   createFormation,
+  updateFormation,
+  deleteFormation,
   createCours,
+  deleteCours,
   createEtudiant,
-  createProfil,
+  updateEtudiant,
+  deleteEtudiant,
 } from "./actions";
 
-import { connection } from "next/server";
+// Classes Tailwind réutilisées dans les formulaires.
+const CHAMP = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-college focus:outline-none focus:ring-2 focus:ring-college-clair";
+const ETIQUETTE = "mb-1 block text-sm font-semibold text-slate-700";
+const BOUTON = "rounded-lg bg-college px-4 py-2 text-sm font-semibold text-white hover:bg-college-fonce";
+const BOUTON_SUPPRIMER = "rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50";
+const CARTE = "rounded-xl border border-slate-200 bg-white p-6 shadow-sm";
 
+/*
+  Route "/gestion" : CRUD des formations (section A) et des étudiants (section B).
+  Chaque section : colonne 1 = formulaire d'ajout, colonne 2 = liste avec Modifier et Supprimer.
+*/
 export default async function GestionPage() {
 
-  // ==========================
-  // READ FORMATIONS
-  // + leurs cours
-  // + leurs étudiants
-  // ==========================
-
+  // Lire la base à chaque visite.
   await connection();
-  
-  const formations =
-    await prisma.formation.findMany({
-      include: {
-        cours: true,
-        etudiants: true,
-      },
 
-      orderBy: {
-        id: "desc",
-      },
-    });
+  // READ : formations + leurs cours (1 à N) + leurs étudiants (N à N)
+  const formations = await prisma.formation.findMany({
+    include: {
+      cours: { orderBy: { titre: "asc" } },
+      etudiants: true,
+    },
+    orderBy: { nom: "asc" },
+  });
 
-
-  // ==========================
-  // READ ETUDIANTS
-  // + profil
-  // + formations
-  // ==========================
-
-  const etudiants =
-    await prisma.etudiant.findMany({
-      include: {
-        profil: true,
-        formations: true,
-      },
-
-      orderBy: {
-        id: "desc",
-      },
-    });
-
+  // READ : étudiants + leur profil (1 à 0..1) + leurs formations (N à N)
+  const etudiants = await prisma.etudiant.findMany({
+    include: {
+      profil: true,
+      formations: true,
+    },
+    orderBy: { nom: "asc" },
+  });
 
   return (
-    <main>
+    <div className="mx-auto max-w-6xl px-4 py-12">
 
-      <h1>
-        Gestion des formations
-      </h1>
+      <EnTete
+        titre="Gestion"
+        description="Ajouter, modifier et supprimer les formations et les étudiants."
+      />
 
 
-      {/* ==================================
-          CREATE FORMATION
-      ================================== */}
+      {/* ==================================================
+          A — GESTION DES FORMATIONS
+      ================================================== */}
+      <section className="mb-16">
+        <h2 className="mb-6 text-2xl font-bold text-college-fonce">A — Formations</h2>
 
-      <section>
+        <div className="grid gap-6 lg:grid-cols-3">
 
-        <h2>
-          Ajouter une formation
-        </h2>
+          {/* COLONNE 1 : formulaire d'ajout */}
+          <div className={`${CARTE} h-fit`}>
+            <h3 className="mb-4 text-lg font-bold">Ajouter une formation</h3>
 
-        <form action={createFormation}>
+            <form action={createFormation} className="space-y-4">
+              <div>
+                <label htmlFor="nomFormation" className={ETIQUETTE}>Nom</label>
+                <input id="nomFormation" name="nomFormation" type="text" required className={CHAMP} />
+              </div>
 
-          <div>
+              <div>
+                <label htmlFor="description" className={ETIQUETTE}>Description</label>
+                <textarea id="description" name="description" rows={3} className={CHAMP} />
+              </div>
 
-            <label htmlFor="nomFormation">
-              Nom
-            </label>
-
-            <input
-              id="nomFormation"
-              name="nomFormation"
-              type="text"
-              required
-            />
-
+              <button type="submit" className={BOUTON}>Ajouter la formation</button>
+            </form>
           </div>
 
+          {/* COLONNE 2 : liste avec Modifier / Supprimer */}
+          <div className="space-y-4 lg:col-span-2">
+            <h3 className="text-lg font-bold">Formations ({formations.length})</h3>
 
-          <div>
+            {formations.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-slate-500">
+                Aucune formation.
+              </p>
+            ) : (
+              formations.map((formation) => (
+                <article key={formation.id} className={CARTE}>
 
-            <label htmlFor="description">
-              Description
-            </label>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-lg font-bold text-college-fonce">{formation.nom}</h4>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {formation.description || "Aucune description."}
+                      </p>
+                      <p className="mt-2 text-xs font-semibold uppercase text-slate-500">
+                        {formation.cours.length} cours · {formation.etudiants.length} étudiant(s)
+                      </p>
+                    </div>
 
-            <textarea
-              id="description"
-              name="description"
-            />
+                    {/* DELETE : .bind fixe l'id de CETTE formation */}
+                    <form action={deleteFormation.bind(null, formation.id)}>
+                      <button type="submit" className={BOUTON_SUPPRIMER}>Supprimer</button>
+                    </form>
+                  </div>
 
+                  {/* UPDATE : formulaire repliable, déjà rempli avec les valeurs actuelles */}
+                  <details className="mt-4 rounded-lg bg-slate-50 p-4">
+                    <summary className="cursor-pointer text-sm font-semibold text-accent">
+                      Modifier
+                    </summary>
+
+                    <form action={updateFormation.bind(null, formation.id)} className="mt-4 space-y-3">
+                      <div>
+                        <label className={ETIQUETTE}>Nom</label>
+                        <input name="nomFormation" type="text" defaultValue={formation.nom} required className={CHAMP} />
+                      </div>
+                      <div>
+                        <label className={ETIQUETTE}>Description</label>
+                        <textarea name="description" rows={2} defaultValue={formation.description ?? ""} className={CHAMP} />
+                      </div>
+                      <button type="submit" className={BOUTON}>Enregistrer</button>
+                    </form>
+
+                    {/* Cours de la formation (relation 1 à N) */}
+                    <div className="mt-6 border-t border-slate-200 pt-4">
+                      <p className="mb-2 text-sm font-semibold text-slate-700">Cours</p>
+
+                      <ul className="mb-3 space-y-2">
+                        {formation.cours.map((cours) => (
+                          <li key={cours.id} className="flex items-center justify-between rounded-md bg-white px-3 py-2 text-sm">
+                            {cours.titre}
+                            <form action={deleteCours.bind(null, cours.id)}>
+                              <button type="submit" className="text-xs font-semibold text-red-600 hover:underline">
+                                Retirer
+                              </button>
+                            </form>
+                          </li>
+                        ))}
+                      </ul>
+
+                      <form action={createCours.bind(null, formation.id)} className="flex gap-2">
+                        <input name="titre" type="text" placeholder="Titre du cours" required className={CHAMP} />
+                        <button type="submit" className={BOUTON}>Ajouter</button>
+                      </form>
+                    </div>
+                  </details>
+
+                </article>
+              ))
+            )}
           </div>
 
-
-          <button type="submit">
-            Ajouter la formation
-          </button>
-
-        </form>
-
+        </div>
       </section>
 
 
-
-      {/* ==================================
-          CREATE COURS
-          Relation 1:n
-      ================================== */}
-
+      {/* ==================================================
+          B — GESTION DES ÉTUDIANTS
+      ================================================== */}
       <section>
-
-        <h2>
-          Ajouter un cours
-        </h2>
-
-        <form action={createCours}>
-
-          <div>
-
-            <label htmlFor="titre">
-              Titre du cours
-            </label>
-
-            <input
-              id="titre"
-              name="titre"
-              type="text"
-              required
-            />
-
-          </div>
-
-
-          <div>
-
-            <label htmlFor="formationId">
-              Formation
-            </label>
-
-            <select
-              id="formationId"
-              name="formationId"
-              required
-            >
-
-              <option value="">
-                Choisir une formation
-              </option>
-
-              {formations.map(
-                (formation) => (
-
-                  <option
-                    key={formation.id}
-                    value={formation.id}
-                  >
-
-                    {formation.nom}
-
-                  </option>
-
-                )
-              )}
-
-            </select>
-
-          </div>
-
-
-          <button type="submit">
-            Ajouter le cours
-          </button>
-
-        </form>
-
-      </section>
-
-
-
-      {/* ==================================
-          CREATE ETUDIANT
-          Relation n:n
-      ================================== */}
-
-      <section>
-
-        <h2>
-          Ajouter un étudiant
-        </h2>
-
-        <form action={createEtudiant}>
-
-          <div>
-
-            <label htmlFor="nomEtudiant">
-              Nom
-            </label>
-
-            <input
-              id="nomEtudiant"
-              name="nomEtudiant"
-              type="text"
-              required
-            />
-
-          </div>
-
-
-          <div>
-
-            <label htmlFor="formations">
-              Formations
-            </label>
-
-            <select
-              id="formations"
-              name="formations"
-              multiple
-            >
-
-              {formations.map(
-                (formation) => (
-
-                  <option
-                    key={formation.id}
-                    value={formation.id}
-                  >
-
-                    {formation.nom}
-
-                  </option>
-
-                )
-              )}
-
-            </select>
-
-          </div>
-
-
-          <button type="submit">
-            Ajouter l'étudiant
-          </button>
-
-        </form>
-
-      </section>
-
-
-
-      {/* ==================================
-          CREATE PROFIL
-          Relation 1:1
-      ================================== */}
-
-      <section>
-
-        <h2>
-          Ajouter un profil
-        </h2>
-
-        <form action={createProfil}>
-
-          <div>
-
-            <label htmlFor="etudiantId">
-              Étudiant
-            </label>
-
-            <select
-              id="etudiantId"
-              name="etudiantId"
-              required
-            >
-
-              <option value="">
-                Choisir un étudiant
-              </option>
-
-              {etudiants
-                .filter(
-                  (etudiant) =>
-                    !etudiant.profil
-                )
-                .map(
-                  (etudiant) => (
-
-                    <option
-                      key={etudiant.id}
-                      value={etudiant.id}
-                    >
-
-                      {etudiant.nom}
-
-                    </option>
-
-                  )
-                )}
-
-            </select>
-
-          </div>
-
-
-          <div>
-
-            <label htmlFor="bio">
-              Biographie
-            </label>
-
-            <textarea
-              id="bio"
-              name="bio"
-            />
-
-          </div>
-
-
-          <button type="submit">
-            Ajouter le profil
-          </button>
-
-        </form>
-
-      </section>
-
-
-
-      {/* ==================================
-          READ FORMATIONS
-          + COURS
-          + ETUDIANTS
-      ================================== */}
-
-      <section>
-
-        <h2>
-          Formations
-        </h2>
-
-
-        {formations.length === 0 ? (
-
-          <p>
-            Aucune formation.
-          </p>
-
-        ) : (
-
-          formations.map(
-            (formation) => (
-
-              <article
-                key={formation.id}
-              >
-
-                <h3>
-                  {formation.nom}
-                </h3>
-
-
-                <p>
-                  {formation.description}
-                </p>
-
-
-                {/* 1:n */}
-
-                <h4>
-                  Cours
-                </h4>
-
-                {formation.cours.length === 0 ? (
-
-                  <p>
-                    Aucun cours.
-                  </p>
-
+        <h2 className="mb-6 text-2xl font-bold text-college-fonce">B — Étudiants</h2>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+
+          {/* COLONNE 1 : formulaire d'ajout */}
+          <div className={`${CARTE} h-fit`}>
+            <h3 className="mb-4 text-lg font-bold">Ajouter un étudiant</h3>
+
+            <form action={createEtudiant} className="space-y-4">
+              <div>
+                <label htmlFor="nomEtudiant" className={ETIQUETTE}>Nom</label>
+                <input id="nomEtudiant" name="nomEtudiant" type="text" required className={CHAMP} />
+              </div>
+
+              <div>
+                <label htmlFor="bio" className={ETIQUETTE}>Biographie (profil, facultatif)</label>
+                <textarea id="bio" name="bio" rows={3} className={CHAMP} />
+              </div>
+
+              {/* N à N : toutes les cases ont le même name="formations" */}
+              <fieldset>
+                <legend className={ETIQUETTE}>Formations</legend>
+                {formations.length === 0 ? (
+                  <p className="text-sm text-slate-500">Ajoutez d&apos;abord une formation.</p>
                 ) : (
-
-                  <ul>
-
-                    {formation.cours.map(
-                      (cours) => (
-
-                        <li key={cours.id}>
-                          {cours.titre}
-                        </li>
-
-                      )
-                    )}
-
-                  </ul>
-
+                  <div className="space-y-1">
+                    {formations.map((formation) => (
+                      <label key={formation.id} className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" name="formations" value={formation.id} className="h-4 w-4 accent-college" />
+                        {formation.nom}
+                      </label>
+                    ))}
+                  </div>
                 )}
+              </fieldset>
 
+              <button type="submit" className={BOUTON}>Ajouter l&apos;étudiant</button>
+            </form>
+          </div>
 
-                {/* n:n */}
+          {/* COLONNE 2 : liste avec Modifier / Supprimer */}
+          <div className="space-y-4 lg:col-span-2">
+            <h3 className="text-lg font-bold">Étudiants ({etudiants.length})</h3>
 
-                <h4>
-                  Étudiants inscrits
-                </h4>
+            {etudiants.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-slate-500">
+                Aucun étudiant.
+              </p>
+            ) : (
+              etudiants.map((etudiant) => (
+                <article key={etudiant.id} className={CARTE}>
 
-                {formation.etudiants.length === 0 ? (
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-lg font-bold text-college-fonce">{etudiant.nom}</h4>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {etudiant.profil?.bio || "Aucune biographie."}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {etudiant.formations.map((formation) => (
+                          <span key={formation.id} className="rounded-full bg-college-clair px-3 py-1 text-xs font-semibold text-college">
+                            {formation.nom}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
 
-                  <p>
-                    Aucun étudiant.
-                  </p>
+                    <form action={deleteEtudiant.bind(null, etudiant.id)}>
+                      <button type="submit" className={BOUTON_SUPPRIMER}>Supprimer</button>
+                    </form>
+                  </div>
 
-                ) : (
+                  <details className="mt-4 rounded-lg bg-slate-50 p-4">
+                    <summary className="cursor-pointer text-sm font-semibold text-accent">
+                      Modifier
+                    </summary>
 
-                  <ul>
+                    <form action={updateEtudiant.bind(null, etudiant.id)} className="mt-4 space-y-3">
+                      <div>
+                        <label className={ETIQUETTE}>Nom</label>
+                        <input name="nomEtudiant" type="text" defaultValue={etudiant.nom} required className={CHAMP} />
+                      </div>
+                      <div>
+                        <label className={ETIQUETTE}>Biographie</label>
+                        <textarea name="bio" rows={2} defaultValue={etudiant.profil?.bio ?? ""} className={CHAMP} />
+                      </div>
+                      <fieldset>
+                        <legend className={ETIQUETTE}>Formations</legend>
+                        <div className="space-y-1">
+                          {formations.map((formation) => (
+                            <label key={formation.id} className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                name="formations"
+                                value={formation.id}
+                                defaultChecked={etudiant.formations.some((f) => f.id === formation.id)}
+                                className="h-4 w-4 accent-college"
+                              />
+                              {formation.nom}
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+                      <button type="submit" className={BOUTON}>Enregistrer</button>
+                    </form>
+                  </details>
 
-                    {formation.etudiants.map(
-                      (etudiant) => (
+                </article>
+              ))
+            )}
+          </div>
 
-                        <li key={etudiant.id}>
-                          {etudiant.nom}
-                        </li>
-
-                      )
-                    )}
-
-                  </ul>
-
-                )}
-
-              </article>
-
-            )
-          )
-
-        )}
-
+        </div>
       </section>
 
-
-
-      {/* ==================================
-          READ ETUDIANTS
-          + PROFIL
-          + FORMATIONS
-      ================================== */}
-
-      <section>
-
-        <h2>
-          Étudiants
-        </h2>
-
-
-        {etudiants.length === 0 ? (
-
-          <p>
-            Aucun étudiant.
-          </p>
-
-        ) : (
-
-          etudiants.map(
-            (etudiant) => (
-
-              <article
-                key={etudiant.id}
-              >
-
-                <h3>
-                  {etudiant.nom}
-                </h3>
-
-
-                {/* 1:1 */}
-
-                <p>
-                  Profil :
-                  {" "}
-                  {
-                    etudiant.profil?.bio
-                    ?? "Aucun profil"
-                  }
-                </p>
-
-
-                {/* n:n */}
-
-                <h4>
-                  Formations suivies
-                </h4>
-
-
-                {etudiant.formations.length === 0 ? (
-
-                  <p>
-                    Aucune formation.
-                  </p>
-
-                ) : (
-
-                  <ul>
-
-                    {etudiant.formations.map(
-                      (formation) => (
-
-                        <li key={formation.id}>
-                          {formation.nom}
-                        </li>
-
-                      )
-                    )}
-
-                  </ul>
-
-                )}
-
-              </article>
-
-            )
-          )
-
-        )}
-
-      </section>
-
-    </main>
+    </div>
   );
 }

@@ -1,3 +1,6 @@
+import Chargement from "@/components/Chargement";
+
+// loading.tsx : affiché par Next.js pendant que page.tsx lit la base.
 export default function Loading() {
-  return <p>Chargement des formations...</p>;
+  return <Chargement texte="Chargement de la gestion..." />;
 }
